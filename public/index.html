@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kimi Web Terminal</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; width: 100%; overflow: hidden; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: #0f1115;
+      color: #e1e3e6;
+    }
+
+    /* 登录页 */
+    #login-page {
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    }
+    .login-card {
+      width: 100%;
+      max-width: 380px;
+      background: rgba(255,255,255,0.06);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 20px;
+      padding: 36px 30px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+    }
+    .login-card h1 {
+      color: #fff;
+      font-size: 24px;
+      text-align: center;
+      margin-bottom: 6px;
+    }
+    .login-card .subtitle {
+      color: rgba(255,255,255,0.55);
+      font-size: 13px;
+      text-align: center;
+      margin-bottom: 28px;
+    }
+    .form-group { margin-bottom: 18px; }
+    .form-group label {
+      display: block;
+      color: rgba(255,255,255,0.75);
+      font-size: 13px;
+      margin-bottom: 7px;
+    }
+    .form-group input {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 10px;
+      background: rgba(0,0,0,0.2);
+      color: #fff;
+      font-size: 14px;
+      outline: none;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    .form-group input:focus {
+      border-color: #4ecdc4;
+      box-shadow: 0 0 0 3px rgba(78,205,196,0.15);
+    }
+    .form-group input::placeholder { color: rgba(255,255,255,0.35); }
+    .login-btn {
+      width: 100%;
+      padding: 13px;
+      margin-top: 8px;
+      border: none;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #4ecdc4 0%, #44a3aa 100%);
+      color: #fff;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform .12s, box-shadow .2s;
+    }
+    .login-btn:hover { transform: translateY(-1px); box-shadow: 0 8px 22px rgba(78,205,196,0.3); }
+    .login-btn:active { transform: translateY(0); }
+    .login-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+    #login-error {
+      margin-top: 14px;
+      color: #ff6b6b;
+      font-size: 13px;
+      text-align: center;
+      min-height: 20px;
+    }
+    .login-footer {
+      margin-top: 22px;
+      text-align: center;
+      color: rgba(255,255,255,0.4);
+      font-size: 12px;
+    }
+
+    /* 主应用 */
+    #app-page {
+      display: none;
+      height: 100%;
+      width: 100%;
+      flex-direction: row;
+    }
+
+    /* 侧边栏 */
+    #sidebar {
+      width: 280px;
+      min-width: 280px;
+      background: #16181d;
+      border-right: 1px solid #252830;
+      display: flex;
+      flex-direction: column;
+    }
+    #sidebar-header {
+      padding: 16px;
+      border-bottom: 1px solid #252830;
+    }
+    #sidebar-header h2 {
+      font-size: 16px;
+      color: #fff;
+      margin-bottom: 12px;
+    }
+    #new-task-btn {
+      width: 100%;
+      padding: 10px;
+      border: none;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #4ecdc4 0%, #44a3aa 100%);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity .15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    #new-task-btn:hover { opacity: 0.9; }
+    #new-task-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    #task-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px;
+    }
+    .task-item {
+      padding: 9px 10px;
+      border-radius: 8px;
+      margin-bottom: 4px;
+      cursor: pointer;
+      transition: background .15s;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid transparent;
+    }
+    .task-item:hover { background: #1e2128; }
+    .task-item.active {
+      background: #1e2128;
+      border-color: #4ecdc4;
+    }
+    .task-icon {
+      font-size: 13px;
+      width: 16px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .task-status {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .task-status.running { background: #4ecdc4; box-shadow: 0 0 6px rgba(78,205,196,0.6); }
+    .task-status.exited { background: #ff6b6b; }
+    .task-info { flex: 1; min-width: 0; }
+    .task-name {
+      font-size: 13px;
+      color: #e1e3e6;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .task-meta {
+      font-size: 11px;
+      color: #6b7280;
+      margin-top: 2px;
+    }
+    .task-actions {
+      display: none;
+      gap: 2px;
+    }
+    .task-item:hover .task-actions { display: flex; }
+    .task-actions button {
+      background: transparent;
+      border: none;
+      color: #9ca3af;
+      cursor: pointer;
+      font-size: 12px;
+      padding: 2px 4px;
+      border-radius: 4px;
+    }
+    .task-actions button:hover { color: #fff; background: rgba(255,255,255,0.1); }
+    #empty-tasks {
+      padding: 30px 16px;
+      text-align: center;
+      color: #6b7280;
+      font-size: 13px;
+    }
+    #sidebar-footer {
+      padding: 12px 16px;
+      border-top: 1px solid #252830;
+      font-size: 12px;
+      color: #6b7280;
+      text-align: center;
+    }
+
+    /* 主区域 */
+    #main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+    #toolbar {
+      height: 46px;
+      background: #16181d;
+      border-bottom: 1px solid #252830;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      flex-shrink: 0;
+    }
+    #toolbar .left, #toolbar .right { display: flex; align-items: center; gap: 12px; }
+    #toolbar .task-title {
+      font-size: 14px;
+      color: #fff;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 200px;
+    }
+    #menu-btn {
+      display: none;
+      background: transparent;
+      border: 1px solid #3a3f4b;
+      border-radius: 6px;
+      color: #e1e3e6;
+      font-size: 18px;
+      width: 32px;
+      height: 32px;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    #status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #ff6b6b;
+    }
+    #status-dot.connected { background: #4ecdc4; box-shadow: 0 0 6px rgba(78,205,196,0.6); }
+    #status-text { font-size: 12px; color: #9ca3af; }
+    .toolbar-btn {
+      padding: 6px 12px;
+      border: 1px solid #3a3f4b;
+      border-radius: 6px;
+      background: #1e2128;
+      color: #e1e3e6;
+      font-size: 12px;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    .toolbar-btn:hover { background: #2a2e36; }
+    .toolbar-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* 终端区域 */
+    #terminal-container {
+      flex: 1;
+      padding: 12px;
+      min-height: 0;
+      position: relative;
+    }
+    #terminal { width: 100%; height: 100%; }
+    .scroll-bottom-btn {
+      position: absolute;
+      right: 24px;
+      bottom: 24px;
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      border: 1px solid #3a3f4b;
+      background: #1e2128;
+      color: #e1e3e6;
+      font-size: 22px;
+      line-height: 1;
+      cursor: pointer;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+      transition: background .15s, transform .12s, opacity .15s;
+      opacity: 0.85;
+      pointer-events: auto;
+    }
+    .scroll-bottom-btn.visible { display: flex; }
+    .scroll-bottom-btn:hover { background: #2a2e36; transform: translateY(-2px); opacity: 1; }
+    #empty-terminal {
+      display: none;
+      height: 100%;
+      align-items: center;
+      justify-content: center;
+      color: #6b7280;
+      font-size: 14px;
+      flex-direction: column;
+      gap: 12px;
+    }
+    #empty-terminal.visible { display: flex; }
+
+    /* 弹窗 */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.6);
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+    .modal-overlay.visible { display: flex; }
+    .modal {
+      background: #1e2128;
+      border: 1px solid #3a3f4b;
+      border-radius: 12px;
+      padding: 24px;
+      width: 360px;
+      max-width: 90%;
+    }
+    .modal h3 {
+      font-size: 15px;
+      color: #fff;
+      margin-bottom: 16px;
+    }
+    .modal input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #3a3f4b;
+      border-radius: 8px;
+      background: #16181d;
+      color: #fff;
+      font-size: 14px;
+      outline: none;
+      margin-bottom: 16px;
+    }
+    .modal input:focus { border-color: #4ecdc4; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
+    .modal-actions button {
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
+      border: none;
+    }
+    .modal-actions .cancel { background: #2a2e36; color: #e1e3e6; }
+    .modal-actions .confirm { background: #4ecdc4; color: #fff; }
+
+    /* 移动端适配 */
+    @media (max-width: 768px) {
+      #menu-btn { display: flex; }
+      #sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        width: 280px;
+        max-width: 80vw;
+        z-index: 50;
+        transform: translateX(-100%);
+        transition: transform .25s ease;
+      }
+      #sidebar.open { transform: translateX(0); }
+      #sidebar-mask {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 40;
+      }
+      #sidebar-mask.visible { display: block; }
+      #toolbar { padding: 0 12px; }
+      #toolbar .left { gap: 8px; }
+      #toolbar .right { gap: 6px; }
+      .toolbar-btn { padding: 5px 8px; font-size: 12px; }
+      #current-task-name { max-width: 90px; }
+      .task-actions { display: flex; }
+      .task-actions button { font-size: 14px; padding: 4px 6px; }
+      .task-item { padding: 12px; }
+      #terminal-container { padding: 8px; }
+      .login-card { padding: 28px 20px; }
+    }
+
+    /* 滚动条 */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #3a3f4b; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #4b5160; }
+  </style>
+</head>
+<body>
+  <!-- 登录页 -->
+  <div id="login-page">
+    <div class="login-card">
+      <h1>Kimi Web Terminal</h1>
+      <div class="subtitle">在浏览器中使用 Kimi Code CLI</div>
+      <form id="login-form">
+        <div class="form-group">
+          <label for="username">用户名</label>
+          <input type="text" id="username" name="username" placeholder="请输入用户名" required autocomplete="username">
+        </div>
+        <div class="form-group">
+          <label for="password">密码</label>
+          <input type="password" id="password" name="password" placeholder="请输入密码" required autocomplete="current-password">
+        </div>
+        <button type="submit" class="login-btn" id="login-btn">登 录</button>
+      </form>
+      <div id="login-error"></div>
+      <div class="login-footer">WebSocket PTY Bridge for Kimi Code CLI</div>
+    </div>
+  </div>
+
+  <!-- 主应用 -->
+  <div id="app-page">
+    <aside id="sidebar">
+      <div id="sidebar-header">
+        <h2>Kimi 任务</h2>
+        <button id="new-task-btn">+ 新建任务</button>
+      </div>
+      <div id="task-list">
+        <div id="empty-tasks">暂无任务，点击上方按钮创建</div>
+      </div>
+      <div id="sidebar-footer">关闭网页不会中断任务</div>
+    </aside>
+    <div id="sidebar-mask"></div>
+
+    <main id="main">
+      <div id="toolbar">
+        <div class="left">
+          <button id="menu-btn" title="任务列表">☰</button>
+          <span id="status-dot"></span>
+          <span id="status-text">未连接</span>
+          <span id="current-task-name" class="task-title"></span>
+        </div>
+        <div class="right">
+          <button id="reconnect-btn" class="toolbar-btn" style="display:none;">重新连接</button>
+          <button id="rename-task-btn" class="toolbar-btn" style="display:none;">重命名</button>
+          <button id="logout-btn" class="toolbar-btn">退出登录</button>
+        </div>
+      </div>
+      <div id="terminal-container">
+        <div id="terminal"></div>
+        <button id="scroll-bottom-btn" class="scroll-bottom-btn" title="滚动到底部">↓</button>
+        <div id="empty-terminal" class="visible">
+          <div id="empty-terminal-msg">请从左侧选择一个任务</div>
+          <button id="empty-new-task-btn" class="toolbar-btn">+ 新建任务</button>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- 重命名弹窗 -->
+  <div id="rename-modal" class="modal-overlay">
+    <div class="modal">
+      <h3>重命名任务</h3>
+      <input type="text" id="rename-input" placeholder="输入任务名称">
+      <div class="modal-actions">
+        <button class="cancel" onclick="closeRenameModal()">取消</button>
+        <button class="confirm" onclick="confirmRename()">确定</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+  <script>
+    const TOKEN_KEY = 'kimi_web_token';
+    let token = localStorage.getItem(TOKEN_KEY);
+    let currentSessionId = null;
+    let ws = null;
+    let terminal = null;
+    let fitAddon = null;
+    let tasks = [];
+    let renameTargetId = null;
+    let scrollCheckInterval = null;
+    let tasksInterval = null;
+
+    const loginPage = document.getElementById('login-page');
+    const appPage = document.getElementById('app-page');
+    const loginForm = document.getElementById('login-form');
+    const loginBtn = document.getElementById('login-btn');
+    const loginError = document.getElementById('login-error');
+    const taskListEl = document.getElementById('task-list');
+    const emptyTasksEl = document.getElementById('empty-tasks');
+    const newTaskBtn = document.getElementById('new-task-btn');
+    const emptyNewTaskBtn = document.getElementById('empty-new-task-btn');
+    const statusDot = document.getElementById('status-dot');
+    const statusText = document.getElementById('status-text');
+    const currentTaskNameEl = document.getElementById('current-task-name');
+    const reconnectBtn = document.getElementById('reconnect-btn');
+    const renameTaskBtn = document.getElementById('rename-task-btn');
+    const logoutBtn = document.getElementById('logout-btn');
+    const terminalEl = document.getElementById('terminal');
+    const scrollBottomBtn = document.getElementById('scroll-bottom-btn');
+    const emptyTerminalEl = document.getElementById('empty-terminal');
+    const emptyTerminalMsg = document.getElementById('empty-terminal-msg');
+    const renameModal = document.getElementById('rename-modal');
+    const renameInput = document.getElementById('rename-input');
+    const sidebar = document.getElementById('sidebar');
+    const sidebarMask = document.getElementById('sidebar-mask');
+    const menuBtn = document.getElementById('menu-btn');
+
+    function setConnected(connected) {
+      statusDot.classList.toggle('connected', connected);
+      statusText.textContent = connected ? '已连接' : '已断开';
+      reconnectBtn.style.display = connected || !currentSessionId ? 'none' : 'inline-block';
+    }
+
+    async function api(path, options = {}) {
+      const res = await fetch(path, {
+        ...options,
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          ...options.headers
+        }
+      });
+      if (res.status === 401) {
+        logout();
+        throw new Error('登录已过期');
+      }
+      return res;
+    }
+
+    async function loadTasks() {
+      const res = await api('/api/tasks');
+      tasks = await res.json();
+      renderTasks();
+      return tasks;
+    }
+
+    function renderTasks() {
+      taskListEl.innerHTML = '';
+      if (tasks.length === 0) {
+        taskListEl.appendChild(emptyTasksEl);
+        emptyTasksEl.style.display = 'block';
+        updateEmptyTerminalMsg();
+        return;
+      }
+      emptyTasksEl.style.display = 'none';
+
+      tasks.slice().sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt)).forEach(task => {
+        const el = document.createElement('div');
+        el.className = 'task-item' + (task.id === currentSessionId ? ' active' : '');
+        el.dataset.id = task.id;
+        const nameTitle = escapeHtml(task.name);
+        el.innerHTML = `
+          <span class="task-icon">●</span>
+          <span class="task-status ${task.status}"></span>
+          <div class="task-info">
+            <div class="task-name" title="${nameTitle}">${escapeHtml(task.name)}</div>
+            <div class="task-meta">${formatTime(task.createdAt)} · ${task.status === 'running' ? '运行中' : '已结束'}</div>
+          </div>
+          <div class="task-actions">
+            <button title="重命名" onclick="event.stopPropagation(); openRenameModal('${task.id}', '${escapeHtml(task.name)}')">✎</button>
+            <button title="删除" onclick="event.stopPropagation(); deleteTask('${task.id}')">✕</button>
+          </div>
+        `;
+        el.addEventListener('click', () => openTask(task.id));
+        taskListEl.appendChild(el);
+      });
+      updateEmptyTerminalMsg();
+    }
+
+    function escapeHtml(str) {
+      const map = {'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'};
+      return str.replace(/[&<>'"]/g, c => map[c]);
+    }
+
+    function formatTime(iso) {
+      const d = new Date(iso);
+      return `${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
+    }
+
+    async function createTask() {
+      newTaskBtn.disabled = true;
+      emptyNewTaskBtn.disabled = true;
+      try {
+        const res = await api('/api/tasks', { method: 'POST', body: JSON.stringify({}) });
+        const task = await res.json();
+        await loadTasks();
+        openTask(task.id);
+      } catch (err) {
+        alert('创建任务失败: ' + err.message);
+      } finally {
+        newTaskBtn.disabled = false;
+        emptyNewTaskBtn.disabled = false;
+      }
+    }
+
+    async function deleteTask(id) {
+      if (!confirm('确定要删除这个任务吗？')) return;
+      try {
+        await api(`/api/tasks/${id}`, { method: 'DELETE' });
+        if (currentSessionId === id) {
+          disconnectTerminal();
+          currentSessionId = null;
+          showEmptyTerminal();
+        }
+        await loadTasks();
+      } catch (err) {
+        alert('删除失败: ' + err.message);
+      }
+    }
+
+    function openRenameModal(id, name) {
+      renameTargetId = id;
+      renameInput.value = name;
+      renameModal.classList.add('visible');
+      renameInput.focus();
+    }
+
+    function closeRenameModal() {
+      renameModal.classList.remove('visible');
+      renameTargetId = null;
+    }
+
+    async function confirmRename() {
+      if (!renameTargetId) return;
+      const name = renameInput.value.trim();
+      if (!name) return;
+      try {
+        await api(`/api/tasks/${renameTargetId}/rename`, {
+          method: 'POST',
+          body: JSON.stringify({ name })
+        });
+        closeRenameModal();
+        await loadTasks();
+        if (currentSessionId === renameTargetId) {
+          currentTaskNameEl.textContent = name;
+        }
+      } catch (err) {
+        alert('重命名失败: ' + err.message);
+      }
+    }
+
+    function showEmptyTerminal() {
+      emptyTerminalEl.classList.add('visible');
+      terminalEl.style.display = 'none';
+      scrollBottomBtn.style.display = 'none';
+      currentTaskNameEl.textContent = '';
+      renameTaskBtn.style.display = 'none';
+      setConnected(false);
+    }
+
+    function showTerminal() {
+      emptyTerminalEl.classList.remove('visible');
+      terminalEl.style.display = 'block';
+      scrollBottomBtn.style.display = '';
+      renameTaskBtn.style.display = 'inline-block';
+    }
+
+    function isTerminalAtBottom(term) {
+      if (!term) return true;
+      const viewport = term.element?.querySelector('.xterm-viewport');
+      if (viewport) {
+        return viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= 3;
+      }
+      const buffer = term.buffer.active;
+      return Math.abs(buffer.viewportY - buffer.baseY) <= 1;
+    }
+
+    function updateScrollBottomBtn() {
+      if (!terminal || !scrollBottomBtn) return;
+      scrollBottomBtn.classList.toggle('visible', !isTerminalAtBottom(terminal));
+    }
+
+    function startScrollCheck() {
+      stopScrollCheck();
+      scrollCheckInterval = setInterval(() => {
+        if (terminal) updateScrollBottomBtn();
+      }, 300);
+    }
+
+    function stopScrollCheck() {
+      if (scrollCheckInterval) {
+        clearInterval(scrollCheckInterval);
+        scrollCheckInterval = null;
+      }
+    }
+
+    function scrollTerminalToBottom() {
+      if (terminal) {
+        terminal.scrollToBottom();
+        updateScrollBottomBtn();
+      }
+    }
+
+    function makeXterm(element) {
+      const term = new Terminal({
+        cursorBlink: true,
+        fontSize: 14,
+        fontFamily: 'Menlo, Monaco, "Courier New", monospace, "Noto Sans CJK SC"',
+        theme: {
+          background: '#0f1115',
+          foreground: '#d4d4d4',
+          cursor: '#d4d4d4',
+          selectionBackground: '#264f78'
+        },
+        allowProposedApi: true
+      });
+      const addon = new FitAddon.FitAddon();
+      term.loadAddon(addon);
+      term.open(element);
+      addon.fit();
+      return { term, addon };
+    }
+
+    function initTerminal() {
+      if (terminal) {
+        terminal.dispose();
+        terminal = null;
+        fitAddon = null;
+      }
+      const t = makeXterm(terminalEl);
+      terminal = t.term;
+      fitAddon = t.addon;
+
+      terminal.onScroll(() => updateScrollBottomBtn());
+      terminal.onWriteParsed(() => updateScrollBottomBtn());
+      setTimeout(() => {
+        const viewport = terminal.element?.querySelector('.xterm-viewport');
+        if (viewport) {
+          viewport.addEventListener('scroll', () => updateScrollBottomBtn(), { passive: true });
+        }
+      }, 0);
+
+      terminal.onData((data) => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(data);
+        }
+      });
+    }
+
+    function sendResize(targetWs, targetFitAddon) {
+      if (!targetWs || targetWs.readyState !== WebSocket.OPEN || !targetFitAddon) return;
+      const dims = targetFitAddon.proposeDimensions();
+      if (dims) {
+        targetWs.send(`\x1b[8;${dims.rows};${dims.cols}t`);
+      }
+    }
+
+    function disconnectTerminal() {
+      stopScrollCheck();
+      if (ws) {
+        ws.close();
+        ws = null;
+      }
+      setConnected(false);
+    }
+
+    function openSidebar() {
+      sidebar.classList.add('open');
+      sidebarMask.classList.add('visible');
+    }
+
+    function closeSidebar() {
+      sidebar.classList.remove('open');
+      sidebarMask.classList.remove('visible');
+    }
+
+    function toggleSidebar() {
+      sidebar.classList.toggle('open');
+      sidebarMask.classList.toggle('visible');
+    }
+
+    function openTask(sessionId) {
+      if (currentSessionId === sessionId && ws && ws.readyState === WebSocket.OPEN) {
+        closeSidebar();
+        return;
+      }
+
+      disconnectTerminal();
+      currentSessionId = sessionId;
+      const task = tasks.find(t => t.id === sessionId);
+      currentTaskNameEl.textContent = task ? task.name : '';
+
+      renderTasks();
+
+      showTerminal();
+      initTerminal();
+      startScrollCheck();
+      connectWebSocket(sessionId);
+
+      closeSidebar();
+    }
+
+    function connectWebSocket(sessionId) {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      ws = new WebSocket(`${protocol}//${window.location.host}/ws?token=${encodeURIComponent(token)}&sessionId=${encodeURIComponent(sessionId)}`);
+
+      ws.onopen = () => {
+        setConnected(true);
+        sendResize(ws, fitAddon);
+      };
+
+      ws.onclose = () => {
+        setConnected(false);
+        if (terminal) {
+          terminal.writeln('\r\n\x1b[31m[连接已关闭]\x1b[0m');
+        }
+      };
+
+      ws.onerror = () => {
+        setConnected(false);
+        if (terminal) {
+          terminal.writeln('\r\n\x1b[31m[WebSocket 连接错误]\x1b[0m');
+        }
+      };
+
+      ws.onmessage = (event) => {
+        if (!terminal) return;
+        if (event.data instanceof Blob) {
+          event.data.arrayBuffer().then(buffer => {
+            terminal.write(new Uint8Array(buffer));
+            updateScrollBottomBtn();
+          });
+        } else if (event.data instanceof ArrayBuffer) {
+          terminal.write(new Uint8Array(event.data));
+          updateScrollBottomBtn();
+        } else {
+          terminal.write(event.data);
+          updateScrollBottomBtn();
+        }
+      };
+    }
+
+    async function doLogin(e) {
+      e.preventDefault();
+      loginError.textContent = '';
+      loginBtn.disabled = true;
+      loginBtn.textContent = '登录中...';
+
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+
+      try {
+        const res = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || '登录失败');
+
+        token = data.token;
+        localStorage.setItem(TOKEN_KEY, token);
+        showApp();
+      } catch (err) {
+        loginError.textContent = err.message;
+        loginBtn.disabled = false;
+        loginBtn.textContent = '登 录';
+      }
+    }
+
+    function isMobile() {
+      return window.innerWidth <= 768;
+    }
+
+    function updateEmptyTerminalMsg() {
+      if (tasks.length === 0) {
+        emptyTerminalMsg.textContent = isMobile()
+          ? '暂无任务，点击左上角 ☰ 打开菜单创建任务'
+          : '暂无任务，点击上方"新建任务"按钮创建';
+      } else {
+        emptyTerminalMsg.textContent = isMobile()
+          ? '点击左上角 ☰ 选择任务'
+          : '请从左侧选择一个任务';
+      }
+    }
+
+    async function showApp() {
+      loginPage.style.display = 'none';
+      appPage.style.display = 'flex';
+      await loadTasks();
+      updateEmptyTerminalMsg();
+      showEmptyTerminal();
+
+      if (tasks.length === 0 && isMobile()) {
+        openSidebar();
+      }
+
+      if (tasksInterval) clearInterval(tasksInterval);
+      tasksInterval = setInterval(loadTasks, 3000);
+    }
+
+    function logout() {
+      disconnectTerminal();
+      currentSessionId = null;
+      token = null;
+      localStorage.removeItem(TOKEN_KEY);
+      appPage.style.display = 'none';
+      loginPage.style.display = 'flex';
+      loginBtn.disabled = false;
+      loginBtn.textContent = '登 录';
+      document.getElementById('password').value = '';
+      loginError.textContent = '';
+      if (terminal) {
+        terminal.dispose();
+        terminal = null;
+      }
+      if (tasksInterval) {
+        clearInterval(tasksInterval);
+        tasksInterval = null;
+      }
+    }
+
+    // 事件绑定
+    scrollBottomBtn.addEventListener('click', scrollTerminalToBottom);
+    loginForm.addEventListener('submit', doLogin);
+    newTaskBtn.addEventListener('click', createTask);
+    emptyNewTaskBtn.addEventListener('click', createTask);
+    reconnectBtn.addEventListener('click', () => {
+      if (currentSessionId) openTask(currentSessionId);
+    });
+    renameTaskBtn.addEventListener('click', () => {
+      const task = tasks.find(t => t.id === currentSessionId);
+      if (task) openRenameModal(task.id, task.name);
+    });
+    logoutBtn.addEventListener('click', logout);
+    renameInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') confirmRename();
+      if (e.key === 'Escape') closeRenameModal();
+    });
+    menuBtn.addEventListener('click', toggleSidebar);
+    sidebarMask.addEventListener('click', closeSidebar);
+
+    window.addEventListener('resize', () => {
+      if (fitAddon) {
+        fitAddon.fit();
+        sendResize(ws, fitAddon);
+        updateScrollBottomBtn();
+      }
+    });
+
+    // 如果已有 token，自动进入
+    if (token) {
+      showApp().catch(() => {
+        token = null;
+        localStorage.removeItem(TOKEN_KEY);
+      });
+    }
+  </script>
+		<script src="./mascot.js"></script>
+	</body>
+</html>

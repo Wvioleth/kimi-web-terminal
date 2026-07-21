@@ -1,0 +1,14 @@
+{
+  "name": "kimi-web",
+  "version": "1.0.2",
+  "description": "Web terminal bridge for Kimi Code CLI",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.22.2",
+    "node-pty": "^1.0.0",
+    "ws": "^8.18.0"
+  }
+}
